@@ -19,7 +19,7 @@
               placeholder="Например DOGE"
             />
           </div>
-          <div class="flex bg-white shadow-md p-1 rounded-md shadow-md flex-wrap">
+          <div class="flex bg-white shadow-md p-1 rounded-md flex-wrap">
             <span @click="getPresetCoin" v-for="(coin, idx) in coinsHint" :key="idx" class="inline-flex items-center px-2 m-1 rounded-md text-xs font-medium bg-gray-300 text-gray-800 cursor-pointer">
               {{coin}}
             </span>
