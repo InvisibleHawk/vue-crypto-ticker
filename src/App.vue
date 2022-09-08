@@ -48,17 +48,46 @@
         </svg>
         Добавить
       </button>
+      <button @click="reset" class="border block text-white bg-gray-600 rounded-full font-medium px-3 py-1">Сброс</button>
     </section>
 
       <template v-if="tickers.length">
       <hr class="w-full border-t border-gray-600 my-4" />
+      <p>Фильтр:</p>
+      <div class="mt-1 w-40 relative rounded-md shadow-md">
+            <input
+              v-model="filter"
+              @input="page = 1"
+              type="text"
+              name="filter"
+              id="filter"
+              class="block w-full pr-10 border-gray-300 text-gray-900 focus:outline-none focus:ring-gray-500 focus:border-gray-500 sm:text-sm rounded-md"
+              placeholder="Например DOGE"
+            />
+        </div>
+      <button
+        v-if="page > 1"
+        @click="page = page - 1"
+        type="button"
+        class="my-4 inline-flex items-center py-2 px-4 border border-transparent shadow-sm text-sm leading-4 font-medium rounded-full text-white bg-gray-600 hover:bg-gray-700 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+      >
+      Назад
+      </button>
+      <button
+        v-if="hasNextPage"
+        @click="page = +page + 1"
+        type="button"
+        class="my-4 mx-2 inline-flex items-center py-2 px-4 border border-transparent shadow-sm text-sm leading-4 font-medium rounded-full text-white bg-gray-600 hover:bg-gray-700 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+      >
+      Вперёд
+      </button>
       <dl class="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-3">
         <div
-          v-for="(t, idx) in tickers"
+          v-for="(t, idx) in paginatedTickers"
           :key="idx"
           @click="select(t)"
           :class="{
-            'border-4': sel === t
+            'border-4': selectedTicker === t
           }"  
           class="bg-white overflow-hidden shadow rounded-lg border-purple-800 border-solid cursor-pointer"
         >
@@ -92,20 +121,20 @@
       </dl>
       <hr class="w-full border-t border-gray-600 my-4" />
     </template>
-    <section v-if="sel" class="relative">
+    <section v-if="selectedTicker" class="relative">
       <h3 class="text-lg leading-6 font-medium text-gray-900 my-8">
-        {{sel.name}} - USD 
+        {{selectedTicker.name}} - USD 
       </h3>
       <div class="flex items-end border-gray-600 border-b border-l h-64">
         <div
-          v-for="(bar, idx) in normalizeGraph()"
+          v-for="(bar, idx) in normalizedGraph"
           :key="idx"
           :style = '{height: `${bar}%`}'
           class="bg-purple-800 border w-10"
         ></div>
       </div>
       <button
-        @click="sel = null"
+        @click="selectedTicker = null"
         type="button"
         class="absolute top-0 right-0"
       >
@@ -145,18 +174,30 @@ export default {
   data() {
     return {
       ticker: '',
+      filter: '',
+
       tickers: [],
+      page: 1,
+      
       isAdded: false,
-      timerID: null,
-      sel: null,
+      selectedTicker: null,
+      
       graph: [],
-      coinsList: []
+      coinsList: [],
     }
   },
 
   async created() {
-
+      const { filter, page } = Object.fromEntries(new URL(window.location).searchParams.entries()) 
       const tickerList = localStorage.getItem('coin-list')
+
+      if(filter) {
+        this.filter = filter
+      }
+
+      if(page) {
+        this.page = page
+      }
 
       if(tickerList) {
         this.tickers = JSON.parse(tickerList)
@@ -168,12 +209,29 @@ export default {
       for(let item in json.Data) {
           this.coinsList.push(item)
       }
+
+
   },
 
-  updated() {
-      
-    
-  },
+  watch: {
+      tickers() {
+        localStorage.setItem('coin-list', JSON.stringify(this.tickers))
+      },
+
+      selectedTicker() {
+        this.graph = []
+      },
+
+      pageStateOption(option) {
+        window.history.pushState(null, document.title, `${window.location.pathname}?filter=${option.filter}&page=${option.page}`)
+      },
+
+      paginatedTickers() {
+        if(this.paginatedTickers.length === 0 && this.page > 1) {
+          this.page -= 1
+        }
+      }
+  },  
 
   computed: {
     coinsHint() {
@@ -184,10 +242,52 @@ export default {
       let coinsPreset = coins.slice(0, 5)
       
       return coinsPreset
-    }
+    },
+
+    startIndex() {
+      return 6 * (this.page - 1)
+    },
+
+    endIndex() {
+        return 6 * this.page
+    },
+
+    filteredTickers() {
+      return this.tickers.filter(ticker => ticker.name.includes(this.filter.toUpperCase()))
+    },
+
+    paginatedTickers() {
+      return this.filteredTickers.slice(this.startIndex, this.endIndex)
+    },
+
+    pageStateOption() {
+      return {
+        page: this.page,
+        filter: this.filter,
+      }
+    },
+
+    hasNextPage() {
+      return this.filteredTickers.length > this.endIndex
+    },
+
+    normalizedGraph() {
+      const minValue = Math.min(...this.graph)
+      const maxValue = Math.max(...this.graph)
+      if(minValue === maxValue) {
+        return this.graph.map(() => 50)
+      }
+      return this.graph.map(price => 5 +((price - minValue) * 95) / (maxValue - minValue))
+    },
   },
 
   methods: {
+    reset() {
+      this.ticker = ''
+      this.filter = ''
+      this.tickers = []
+    },
+
     subscribeToUpdates(tickerName) {
       setInterval(async () => {
         
@@ -195,7 +295,7 @@ export default {
         const data = await f.json()
         this.tickers.find(t => t.name === tickerName).price = data.USD > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2) 
 
-        if(tickerName === this.sel?.name) {
+        if(tickerName === this.selectedTicker?.name) {
             this.graph.push(data.USD)
         }
 
@@ -219,11 +319,11 @@ export default {
        }
 
 
-      this.tickers.push(currentTicker)
+      this.tickers = [...this.tickers, currentTicker]
 
-      localStorage.setItem('coin-list', JSON.stringify(this.tickers))
       this.subscribeToUpdates(currentTicker.name)
       this.ticker = ''
+      this.filter = ''
     },
 
     getPresetCoin(e) {
@@ -233,19 +333,13 @@ export default {
     },
 
     deleteTicker(tickerToRemove) {
-      if(tickerToRemove === this.sel) this.sel = null
+      if(tickerToRemove === this.selectedTicker) this.selectedTicker = null
+      
       this.tickers = this.tickers.filter(t => t !== tickerToRemove)
     },
 
-    normalizeGraph() {
-      const minValue = Math.min(...this.graph)
-      const maxValue = Math.max(...this.graph)
-      return this.graph.map(price => 5 +((price - minValue) * 95) / (maxValue - minValue))
-    },
-
     select(ticker) {
-      this.sel = ticker
-      this.graph = []
+      this.selectedTicker = ticker
     },
 
     change(e) {
