@@ -53,8 +53,11 @@
         </button>
         <dl class="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-3">
           <div v-for="(t, idx) in paginatedTickers" :key="idx" @click="select(t)" :class="{
-            'border-4': selectedTicker === t
-          }" class="bg-white overflow-hidden shadow rounded-lg border-purple-800 border-solid cursor-pointer">
+            'border-4': selectedTicker === t,
+            'bg-red-200': t.price === '-',
+            'bg-white': t.price,
+          }" 
+          class="overflow-hidden shadow rounded-lg border-purple-800 border-solid cursor-pointer">
             <div class="px-4 py-5 sm:p-6 text-center">
               <dt class="text-sm font-medium text-gray-500 truncate">
                 {{t.name}} - USD
@@ -65,7 +68,7 @@
             </div>
             <div class="w-full border-t border-gray-200"></div>
             <button @click.stop="deleteTicker(t)"
-              class="flex items-center justify-center font-medium w-full bg-gray-100 px-4 py-4 sm:px-6 text-md text-gray-500 hover:text-gray-600 hover:bg-gray-200 hover:opacity-20 transition-all focus:outline-none">
+              class="flex items-center justify-center font-medium w-full bg-gray-100 px-4 py-4 sm:px-6 text-md text-gray-500 hover:text-gray-600 hover:bg-red-100 transition-all focus:outline-none">
               <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="#718096"
                 aria-hidden="true">
                 <path fill-rule="evenodd"
@@ -104,7 +107,7 @@
 
 <script>
 
-import { subscribeToTicker, unsubscribeFromTicker } from './api'
+import { subscribeToTicker, unsubscribeFromTicker, getTickersList } from './api'
 
 export default {
   name: 'App',
@@ -143,12 +146,10 @@ export default {
       })
     }
 
-    setInterval(this.updateTickers, 5000)
 
-    const data = await fetch(`https://min-api.cryptocompare.com/data/all/coinlist?summary=true`)
-    const json = await data.json()
+    const { Data: tickersList } = await getTickersList()
 
-    for (let item in json.Data) {
+    for (let item in tickersList) {
       this.coinsList.push(item)
     }
   },
@@ -229,7 +230,12 @@ export default {
     },
 
     updateTicker(tickerName, newPrice) {
-      this.tickers.filter(t => t.name === tickerName).forEach(t => t.price = newPrice)
+      this.tickers.filter(t => t.name === tickerName).forEach(t => { 
+        t.price = newPrice 
+        if(t === this.selectedTicker) {
+          this.graph.push(t.price) 
+        }
+      })
     },
 
     formatPrice(price) {
